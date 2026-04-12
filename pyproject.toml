@@ -1,0 +1,18 @@
+[project]
+name = "cpu-scheduler-openenv"
+version = "0.1.0"
+description = "CPU Scheduling RL Environment using OpenEnv"
+authors = [{name = "Ali"}]
+
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "openenv-core>=0.2.0"
+]
+
+[project.scripts]
+server = "server:main"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"

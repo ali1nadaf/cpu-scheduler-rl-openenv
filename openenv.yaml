@@ -1,0 +1,135 @@
+name: cpu-scheduler-env
+version: "1.0"
+description: >
+  Reinforcement Learning environment for CPU scheduling optimization.
+  An agent learns to schedule processes across three difficulty levels,
+  minimizing waiting time and maximizing CPU utilization.
+
+entry_point: cpu_env:CPUSchedulerEnv
+
+author: Mohtra AI
+license: MIT
+
+# ── API ───────────────────────────────────────────────────────────────────────
+api:
+  reset:  "reset() -> dict"
+  step:   "step(action: int | None) -> (dict, float, bool, dict)"
+  state:  "state() -> dict"
+
+# ── Spaces ────────────────────────────────────────────────────────────────────
+observation_space:
+  type: dict
+  fields:
+    time:
+      type: int
+      description: Current simulation clock tick
+    ready_queue:
+      type: list[dict]
+      description: >
+        Active processes. Each entry contains:
+          id (int), arrival (int), remaining (int),
+          priority (int 1-5), waiting (int)
+    queue_length:
+      type: int
+      description: Number of processes currently in the ready queue
+    pending_arrivals:
+      type: int
+      description: Processes not yet arrived (future queue size)
+    completed_count:
+      type: int
+      description: Number of processes completed this episode
+    idle_ticks:
+      type: int
+      description: Total ticks the CPU spent idle
+    difficulty:
+      type: str
+      description: Active difficulty level (easy | medium | hard)
+
+action_space:
+  type: discrete
+  description: >
+    Integer index into ready_queue selecting which process to run.
+    None or out-of-range index → CPU idles for one tick.
+  min: 0
+  max: "len(ready_queue) - 1"
+
+reward_range: [-100, 100]
+
+reward_components:
+  - name: base_step_cost
+    value: -1.0
+    description: Every scheduled tick costs 1 unit
+  - name: partial_progress
+    value: +0.5
+    description: Partial credit for reducing remaining time
+  - name: starvation_penalty
+    value: "-0.05 × max_waiting"
+    description: Penalises accumulated waiting in the queue
+  - name: idle_penalty
+    value: -3.0
+    description: Penalty for leaving the CPU idle
+  - name: invalid_action_penalty
+    value: -8.0
+    description: Penalty for illegal action index
+  - name: completion_bonus
+    value: +10.0
+    description: Reward for completing a process
+  - name: priority_bonus
+    value: "+2 × priority"
+    description: Extra reward for completing high-priority processes
+  - name: turnaround_bonus
+    value: "max(0, 20 − turnaround)"
+    description: Bonus for low turnaround time (capped at 20)
+
+# ── Difficulty levels ─────────────────────────────────────────────────────────
+difficulty_levels:
+  easy:
+    processes: 4
+    arrivals: all at t=0
+    priorities: uniform (3)
+    dynamic_injection: false
+    description: Baseline — all jobs ready at start, equal importance
+  medium:
+    processes: 6
+    arrivals: staggered (t ∈ [0, 6])
+    priorities: varied (1–5)
+    dynamic_injection: false
+    description: Realistic workload with mixed priorities and arrival times
+  hard:
+    processes: 8
+    arrivals: staggered (t ∈ [0, 5])
+    priorities: varied (1–5)
+    dynamic_injection: true
+    injections: 2–3 surprise arrivals at t ∈ [5, 20]
+    description: Adversarial scheduling with dynamic mid-episode process injection
+
+# ── Episode termination ───────────────────────────────────────────────────────
+termination:
+  condition: ready_queue is empty AND future_queue is empty
+  max_steps: 300
+
+# ── Info dict (on done=True) ──────────────────────────────────────────────────
+episode_stats:
+  avg_turnaround:    float   # mean finish - arrival
+  avg_waiting_time:  float   # mean accumulated waiting
+  avg_response_time: float   # mean first_run - arrival
+  throughput:        int     # total processes completed
+  cpu_utilization:   float   # (active_ticks / total_ticks) × 100
+  total_time:        int     # total ticks elapsed
+  idle_ticks:        int     # ticks CPU was idle
+
+# ── Benchmark policies ────────────────────────────────────────────────────────
+benchmark_policies:
+  - FCFS        # First-Come First-Served
+  - SJF         # Shortest Job First (preemptive)
+  - Priority    # Highest priority first
+  - RoundRobin  # Circular rotation
+  - Random      # Baseline random selection
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+dependencies:
+  python: ">=3.10"
+  packages:
+    - numpy
+    - colorama
+    - matplotlib
